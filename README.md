@@ -27,7 +27,7 @@ This project is a web-based Python code practice tool that provides real-time er
 
 2. Create and activate a virtual environment:
     ```sh
-    python -m venv venv
+    python3 -m venv venv
     source venv/bin/activate  
     # On Windows use 
     `venv\Scripts\activate`

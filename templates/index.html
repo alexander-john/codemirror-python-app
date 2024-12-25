@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CodeMirror Python Practice with Error Feedback</title>
+  <!-- CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+  <!-- Theme CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+  <!-- Linting CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/lint/lint.min.css">
+  <!-- Hint Addon CSS (Optional) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/hint/show-hint.min.css">
+  
+  <!-- Custom CSS for feedback -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .CodeMirror {
+      height: 400px;
+      border: 1px solid #ccc;
+    }
+    #feedback {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .error-line {
+      background-color: #fdd;
+    }
+    .warning-line {
+      background-color: #fffae6;
+    }
+  </style>
+</head>
+<body>
+  <h1>Python Code Practice</h1>
+  <p>Write two functions:</p>
+  <ul>
+    <li><strong>return_five</strong>: Returns the integer <code>5</code>.</li>
+    <li><strong>return_ten</strong>: Returns the integer <code>10</code>.</li>
+  </ul>
+  
+  <textarea id="python-editor"># Write your functions here</textarea>
+  
+  <div id="feedback"></div>
+  
+  <!-- CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+  <!-- Python Mode -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+  <!-- Linting Addons -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/lint/lint.min.js"></script>
+  <!-- Hint Addons (Optional) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/hint/show-hint.min.js"></script>
+  
+  <!-- Your custom script -->
+  <script>
+    // Initialize CodeMirror
+    const editor = CodeMirror.fromTextArea(document.getElementById('python-editor'), {
+      mode: 'python',
+      theme: 'dracula',
+      lineNumbers: true,
+      autoCloseBrackets: true,
+      tabSize: 4,
+      indentWithTabs: false,
+      autofocus: true,
+      lineWrapping: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-lint-markers"],
+      lint: false, // We'll handle linting manually
+      extraKeys: {
+        'Ctrl-Space': 'autocomplete',
+      },
+    });
+    
+    // Keep track of current markers to clear them before adding new ones
+    let currentErrorMarkers = [];
+    let currentWarningMarkers = [];
+    
+    // Function to display feedback
+    function displayFeedback(message, isSuccess) {
+      const feedback = document.getElementById('feedback');
+      feedback.textContent = message;
+      feedback.className = isSuccess ? 'success' : 'error';
+    }
+    
+    // Function to send code to the server for linting
+    async function lintCode(code) {
+      try {
+        const response = await fetch('/api/lint', { // Endpoint defined in server.py
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const result = await response.json();
+        return result; // { errors: [...], warnings: [...] }
+      } catch (error) {
+        console.error('Error linting code:', error);
+        return null;
+      }
+    }
+    
+    // Function to send code to the server for validation
+    async function validateCode(code) {
+      try {
+        const response = await fetch('/api/validate', { // Endpoint defined in server.py
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const result = await response.json();
+        return result; // { success: true/false, messages: [...] }
+      } catch (error) {
+        console.error('Error validating code:', error);
+        return { success: false, messages: ['Server error during validation.'] };
+      }
+    }
+    
+    // Function to handle linting results
+    function handleLintResults(lintResults) {
+      // Clear existing markers
+      currentErrorMarkers.forEach(marker => {
+        console.log('Clearing marker:', marker);
+        if (marker && typeof marker.clear === 'function') {
+          marker.clear();
+        } else {
+          console.warn('Marker does not have a clear function:', marker);
+        }
+      });
+      currentWarningMarkers.forEach(marker => {
+        console.log('Clearing marker:', marker);
+        if (marker && typeof marker.clear === 'function') {
+          marker.clear();
+        } else {
+          console.warn('Marker does not have a clear function:', marker);
+        }
+      });
+      currentErrorMarkers = [];
+      currentWarningMarkers = [];
+    
+      if (lintResults) {
+        if (lintResults.errors.length === 0 && lintResults.warnings.length === 0) {
+          displayFeedback('No linting errors. Good job!', true);
+        } else {
+          let messages = '';
+          lintResults.errors.forEach(error => {
+            messages += `Error: ${error.message} (Line ${error.line})\n`;
+            // Highlight error lines using markText
+            const marker = editor.markText(
+              { line: error.line - 1, ch: 0 },
+              { line: error.line - 1, ch: 1000 }, // Assuming line length < 1000
+              { className: 'error-line' }
+            );
+            console.log('Added error marker:', marker);
+            currentErrorMarkers.push(marker);
+          });
+          lintResults.warnings.forEach(warning => {
+            messages += `Warning: ${warning.message} (Line ${warning.line})\n`;
+            // Highlight warning lines using markText
+            const marker = editor.markText(
+              { line: warning.line - 1, ch: 0 },
+              { line: warning.line - 1, ch: 1000 }, // Assuming line length < 1000
+              { className: 'warning-line' }
+            );
+            console.log('Added warning marker:', marker);
+            currentWarningMarkers.push(marker);
+          });
+          displayFeedback(messages, false);
+        }
+      }
+    }
+    
+    // Function to handle validation results
+    function handleValidationResult(result) {
+      if (result.success) {
+        displayFeedback('Success! Both functions are correctly implemented.', true);
+      } else {
+        displayFeedback(result.messages.join('\n'), false);
+      }
+    }
+    
+    // Listen to changes in the editor with debounce
+    let timeout;
+    editor.on('change', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(async () => {
+        const code = editor.getValue();
+        const lintResults = await lintCode(code);
+        handleLintResults(lintResults);
+    
+        const validationResult = await validateCode(code);
+        handleValidationResult(validationResult);
+      }, 1000); // Validate after 1 second of inactivity
+    });
+    
+    // Optional: Initial linting and validation on load
+    window.onload = async () => {
+      const code = editor.getValue();
+      const lintResults = await lintCode(code);
+      handleLintResults(lintResults);
+    
+      const validationResult = await validateCode(code);
+      handleValidationResult(validationResult);
+    };
+  </script>
+</body>
+</html>

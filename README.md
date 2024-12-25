@@ -35,7 +35,7 @@ This project is a web-based Python code practice tool that provides real-time er
 
 3. Install the required packages:
     ```sh
-    pip install -r requirements.txt
+    pip install Flask pylint
     ```
 
 ### Running the App
